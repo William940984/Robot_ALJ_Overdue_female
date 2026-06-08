@@ -67,34 +67,75 @@ function decodeDialogue(value: string): string {
     .trim()
 }
 
+// Escape raw control characters (newlines, tabs, etc.) that appear *inside*
+// JSON string literals. The Dyna.AI "answer" payload sometimes embeds literal
+// line breaks inside values (e.g. a multi-line WillingToPay analysis), which
+// makes JSON.parse throw "Invalid control character". We walk the string and
+// only escape control chars that occur while we are inside a quoted string,
+// leaving structural whitespace between tokens untouched.
+function sanitizeJsonControlChars(input: string): string {
+  let result = ""
+  let inString = false
+  let escaped = false
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i]
+    const code = input.charCodeAt(i)
+
+    if (escaped) {
+      result += char
+      escaped = false
+      continue
+    }
+
+    if (char === "\\") {
+      result += char
+      escaped = true
+      continue
+    }
+
+    if (char === '"') {
+      inString = !inString
+      result += char
+      continue
+    }
+
+    // Escape raw control characters only when inside a string literal
+    if (inString && code <= 0x1f) {
+      if (char === "\n") result += "\\n"
+      else if (char === "\r") result += "\\r"
+      else if (char === "\t") result += "\\t"
+      else result += "\\u" + code.toString(16).padStart(4, "0")
+      continue
+    }
+
+    result += char
+  }
+
+  return result
+}
+
 function parseAnswer(answer: string): Record<string, unknown> | null {
   try {
-    // First attempt: try parsing directly as JSON object
-    let parsed = JSON.parse(answer)
-    
+    // First attempt: try parsing the sanitized payload directly
+    let parsed = JSON.parse(sanitizeJsonControlChars(answer))
+
     // If it's an array, get the first element (e.g., ["{ ... }"])
     if (Array.isArray(parsed) && parsed.length > 0) {
       parsed = parsed[0]
     }
-    
+
     // If the result is still a string, it may be double-encoded JSON
     // e.g., "{\"phoneNumber\":\"123\"}" or with escaped newlines
     if (typeof parsed === "string") {
-      // Clean up escape sequences: remove \n, \r, \t and extra backslashes
-      let cleaned = parsed
-        .replace(/\\n/g, "")
-        .replace(/\\r/g, "")
-        .replace(/\\t/g, "")
-        .trim()
-      
-      parsed = JSON.parse(cleaned)
+      parsed = JSON.parse(sanitizeJsonControlChars(parsed))
     }
-    
+
     // Final check: ensure it's a valid object
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>
     }
-    
+
     return null
   } catch {
     return null
