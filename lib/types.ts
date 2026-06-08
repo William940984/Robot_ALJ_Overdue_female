@@ -12,8 +12,8 @@ export interface ApiConfig {
 }
 
 export const DEFAULT_CONFIG: ApiConfig = {
-  robotKey: "uz2e7c3iC6h56EciokWMy2x%2Bjmk%3D",
-  robotToken: "MTc4MDQ4NTk2MTE0NwptV0hTVGNsTXBIcTRNdmNOMGxlc2s0Uk5jeU09",
+  robotKey: "0t0Ghhpnf37TvG6X6P4krQQlP24%3D",
+  robotToken: "MTc4MDg4NDMzMjI0NApBSUhSa3NER0NEekFhVkd2dmNiaGQrRmYveHc9",
 }
 
 export const DEFAULT_USERNAME = "william.pang@dyna.ai"
