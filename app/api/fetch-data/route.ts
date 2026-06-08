@@ -7,6 +7,7 @@ interface SegmentItem {
 }
 
 interface DetailItem {
+  question: string
   answer: string
   create_time: string
   message_source: string
@@ -16,6 +17,54 @@ export interface DataRow {
   id: string
   createTime: string
   rawData: Record<string, unknown>
+  historyDialogue: string
+}
+
+// Parse the "question" field (a JSON string) and extract historyDialogue text.
+// Falls back to regex extraction when the JSON is truncated/incomplete.
+function parseHistoryDialogue(question: string): string {
+  if (!question || typeof question !== "string") return ""
+
+  // 1) Try strict JSON parse first (clean, complete payloads)
+  try {
+    const parsed = JSON.parse(question)
+    if (parsed && typeof parsed === "object" && typeof parsed.historyDialogue === "string") {
+      return decodeDialogue(parsed.historyDialogue)
+    }
+  } catch {
+    // Ignore and fall through to manual extraction
+  }
+
+  // 2) Fallback: manually locate "historyDialogue" and read until the value ends.
+  // Handles truncated JSON where the closing quote/brace is missing.
+  const keyMatch = question.match(/"historyDialogue"\s*:\s*"/)
+  if (keyMatch && keyMatch.index !== undefined) {
+    const valueStart = keyMatch.index + keyMatch[0].length
+    let end = valueStart
+    // Walk forward until we hit an unescaped closing double quote, or the end of string
+    while (end < question.length) {
+      if (question[end] === '"' && question[end - 1] !== "\\") {
+        break
+      }
+      end++
+    }
+    const rawValue = question.slice(valueStart, end)
+    return decodeDialogue(rawValue)
+  }
+
+  return ""
+}
+
+// Convert escaped sequences (\n, \r, \t, \", \\) into their real characters
+function decodeDialogue(value: string): string {
+  return value
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\n")
+    .replace(/\\t/g, " ")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\")
+    .trim()
 }
 
 function parseAnswer(answer: string): Record<string, unknown> | null {
@@ -155,6 +204,7 @@ export async function POST(request: NextRequest) {
             id: `${segment.segment_code}-${index}`,
             createTime: detail.create_time,
             rawData: parsed,
+            historyDialogue: parseHistoryDialogue(detail.question),
           }
 
           return row

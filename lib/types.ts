@@ -3,6 +3,7 @@ export interface DataRow {
   id: string
   createTime: string
   rawData: Record<string, unknown>
+  historyDialogue: string
 }
 
 export interface ApiConfig {
