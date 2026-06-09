@@ -241,11 +241,19 @@ export async function POST(request: NextRequest) {
             return null
           }
 
+          // Prefer historyDialogue from the parsed answer; fall back to question.
+          // When parsed from JSON, the answer's historyDialogue already contains
+          // real newlines, so decodeDialogue just normalizes/trims it.
+          const answerDialogue =
+            typeof parsed.historyDialogue === "string"
+              ? decodeDialogue(parsed.historyDialogue)
+              : ""
+
           const row: DataRow = {
             id: `${segment.segment_code}-${index}`,
             createTime: detail.create_time,
             rawData: parsed,
-            historyDialogue: parseHistoryDialogue(detail.question),
+            historyDialogue: answerDialogue || parseHistoryDialogue(detail.question),
           }
 
           return row
