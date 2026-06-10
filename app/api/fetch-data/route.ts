@@ -122,7 +122,24 @@ const KNOWN_ANSWER_FIELDS = [
   "WillingToPay",
   "PromisedDate",
   "historyDialogue",
+  "audio",
 ]
+
+// Extract the recording URL and file name from the answer's "audio" field.
+// The audio value is a string containing Python-style dict syntax (single
+// quotes), e.g. "[{'file_name': 'x.mp3', 'file_url': 'https://...'}]".
+// We use regex so it works regardless of JSON validity or quote style.
+function parseAudioInfo(audio: unknown): { url: string; fileName: string } | null {
+  if (typeof audio !== "string" || audio.trim() === "") return null
+
+  const urlMatch = audio.match(/['"]file_url['"]\s*:\s*['"]([^'"]+)['"]/)
+  if (!urlMatch || !urlMatch[1]) return null
+
+  const nameMatch = audio.match(/['"]file_name['"]\s*:\s*['"]([^'"]+)['"]/)
+  const fileName = nameMatch && nameMatch[1] ? nameMatch[1] : "recording.mp3"
+
+  return { url: urlMatch[1], fileName }
+}
 
 // Lenient extractor used as a last resort when strict JSON.parse fails.
 // Some answers contain UNESCAPED double quotes inside string values
@@ -321,11 +338,16 @@ async function fetchRecords(options: FetchOptions): Promise<DataRow[]> {
             ? decodeDialogue(parsed.historyDialogue)
             : ""
 
+        // Parse the optional recording info from the "audio" field
+        const audioInfo = parseAudioInfo(parsed.audio)
+
         const row: DataRow = {
           id: `${idPrefix}-${segment.segment_code}-${index}`,
           createTime: detail.create_time,
           rawData: parsed,
           historyDialogue: answerDialogue || parseHistoryDialogue(detail.question),
+          audioUrl: audioInfo?.url,
+          audioFileName: audioInfo?.fileName,
         }
 
         return row

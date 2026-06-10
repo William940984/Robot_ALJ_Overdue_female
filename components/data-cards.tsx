@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useCallback } from "react"
-import { Search, Calendar, X, Download, Phone, FileText, CreditCard, CalendarClock, MessageSquare, ChevronDown } from "lucide-react"
+import { Search, Calendar, X, Download, Phone, FileText, CreditCard, CalendarClock, MessageSquare, ChevronDown, Headphones } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -40,9 +40,38 @@ function extractAnswerData(rawData: Record<string, unknown>): AnswerData {
   }
 }
 
+// Download the conversation recording via the server-side proxy route.
+// We fetch the file as a Blob (same-origin within the preview iframe, which
+// preserves auth/session) and download from a blob URL. Navigating directly to
+// the API route via an anchor href would escape the sandboxed iframe and hit
+// the protected deployment, showing an "Unauthorized" page instead.
+async function downloadRecording(row: DataRow) {
+  if (!row.audioUrl) return
+  const fileName = row.audioFileName || "recording.mp3"
+  const params = new URLSearchParams({ url: row.audioUrl, fileName })
+
+  try {
+    const response = await fetch(`/api/download-audio?${params.toString()}`)
+    if (!response.ok) {
+      throw new Error(`Download failed with status ${response.status}`)
+    }
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = blobUrl
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(blobUrl)
+  } catch (error) {
+    console.error("[v0] Recording download error:", error)
+    alert("Failed to download the recording. Please try again.")
+  }
+}
+
 // Download single card as Excel
-function downloadSingleCard(row: DataRow) {
-  const answerData = extractAnswerData(row.rawData)
+function downloadSingleCard(row: DataRow) {  const answerData = extractAnswerData(row.rawData)
   const headers = ["Created Time", ...Object.values(FIELD_LABELS)]
   const values = [row.createTime, answerData.phoneNumber, answerData.DelayReason, answerData.WillingToPay, answerData.PromisedDate]
   
@@ -176,13 +205,26 @@ export function DataCards({ data }: DataCardsProps) {
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground">{row.createTime}</span>
                     </div>
-                    <button
-                      onClick={() => downloadSingleCard(row)}
-                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                      title="Download this record"
-                    >
-                      <Download className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {row.audioUrl && (
+                        <button
+                          onClick={() => downloadRecording(row)}
+                          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          title="Download recording"
+                          aria-label="Download recording"
+                        >
+                          <Headphones className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => downloadSingleCard(row)}
+                        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                        title="Download this record"
+                        aria-label="Download this record"
+                      >
+                        <Download className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Conversation History - collapsible, collapsed by default */}

@@ -4,6 +4,9 @@ export interface DataRow {
   createTime: string
   rawData: Record<string, unknown>
   historyDialogue: string
+  // Recording download info parsed from the answer's "audio" field (optional)
+  audioUrl?: string
+  audioFileName?: string
 }
 
 export interface ApiConfig {
